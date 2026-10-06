@@ -1,145 +1,240 @@
-# AI Readiness Audit — Web Application
+# WebISight — Website Readiness & AI Discoverability Analyzer
 
-A production Spring Boot web application that audits any website for
-**AI discoverability** (can AI assistants find, cite, and correctly
-represent this site?) and **user engagement** (is the page actually
-clear and usable?).
+[![Java 21](https://img.shields.io/badge/Java-21-007396?logo=openjdk&logoColor=white)](https://openjdk.org/projects/jdk/21/)
+[![Spring Boot 3](https://img.shields.io/badge/Spring%20Boot-3.x-6DB33F?logo=springboot&logoColor=white)](https://spring.io/projects/spring-boot)
+[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
+[![Maven](https://img.shields.io/badge/Maven-Build-C71A36?logo=apachemaven&logoColor=white)](https://maven.apache.org/)
+[![Live Demo](https://img.shields.io/badge/Live_Demo-Railway-0B0D0E?logo=railway&logoColor=white)](https://webisight-website-readiness-ai-discoverability-production.up.railway.app)
 
-Enter a URL in the browser, get back a scored, evidence-backed report in
-seconds — no CLI, no JSON file to read by hand.
+A production-grade **Spring Boot** web application that audits any website for **AI discoverability** (*can AI assistants find, cite, and accurately represent this site?*) and **user engagement** (*is the page clear, structured, and usable?*).
 
-## Architecture
+Enter a URL in the browser and receive a scored, evidence-backed diagnostic report in seconds — no CLI required and no raw JSON files to inspect by hand.
 
-```
+- **Live Deployment:** [webisight-website-readiness-ai-discoverability-production.up.railway.app](https://webisight-website-readiness-ai-discoverability-production.up.railway.app)
+- **Source Code:** [github.com/Utkarsh-1129/WebISight-Website-Readiness-AI-Discoverability](https://github.com/Utkarsh-1129/WebISight-Website-Readiness-AI-Discoverability)
+
+---
+
+## Table of Contents
+
+- [Key Capabilities](#key-capabilities)
+- [System Architecture](#system-architecture)
+- [Audit Skills & Evaluation Criteria](#audit-skills--evaluation-criteria)
+- [Tech Stack](#tech-stack)
+- [Project Structure](#project-structure)
+- [Getting Started](#getting-started)
+  - [Prerequisites](#prerequisites)
+  - [Run Locally with Maven](#run-locally-with-maven)
+  - [Run with Docker Compose](#run-with-docker-compose)
+- [Environment Configuration](#environment-configuration)
+- [REST API Reference](#rest-api-reference)
+- [Production Engineering Highlights](#production-engineering-highlights)
+- [Testing](#testing)
+- [Extending with a New Audit Skill](#extending-with-a-new-audit-skill)
+- [Scope & Design Trade-offs](#scope--design-trade-offs)
+- [Author](#author)
+
+---
+
+## Key Capabilities
+
+- **Single-Pass Shared Crawling:** Fetches and parses the target HTML document once via `HttpFetcher` (`Jsoup`) and shares the immutable `CrawlResult` across all audit skills.
+- **Modular Skill Pipeline:** Evaluates pages across four specialized dimensions: **Crawlability & Rendering**, **Structured Data & Schema**, **Content Freshness**, and **User Engagement**.
+- **Fault-Tolerant Execution:** Executes audits inside a bounded thread pool with strict per-request timeouts so slow or unresponsive target servers never block web server threads.
+- **Per-IP Rate Limiting:** Protects the outbound crawling endpoint (`/api/audit`) from abuse using a configurable sliding-window rate limiter.
+- **Actionable Prioritization:** Automatically ranks failed checks by severity (`CRITICAL` → `HIGH` → `MEDIUM` → `LOW`) with concrete DOM evidence and remediation steps.
+
+---
+
+## System Architecture
+
+```text
 Browser (index.html)
-     │  POST /api/audit  { "url": "..." }
+     │  POST /api/audit  { "url": "[https://example.com](https://example.com)" }
      ▼
 AuditController  ──▶  AuditService  ──▶  AuditOrchestrator
-                          │                    │
-                    (bounded thread pool,      ├──▶ CrawlSkill
-                     hard timeout)             ├──▶ SchemaSkill
-                          │                    ├──▶ FreshnessSkill
-                          ▼                    └──▶ EngagementSkill
-                    ReportGenerator
-                          │
-                          ▼
-                    AuditReport (JSON)
-                          │
-                          ▼
-                 Rendered dashboard (browser)
+                           │                     │
+                     (bounded thread pool,       ├──▶ CrawlSkill      (Crawlability & rendering)
+                      hard timeout)              ├──▶ SchemaSkill     (JSON-LD & metadata)
+                           │                     ├──▶ FreshnessSkill  (Stale/consistent facts)
+                           ▼                     └──▶ EngagementSkill (UX & content clarity)
+                     ReportGenerator
+                           │
+                           ▼
+                     AuditReport (JSON)
+                           │
+                           ▼
+                  Rendered Dashboard (Browser)
 ```
 
-Every skill runs against **one shared crawl** of the page (`HttpFetcher`
-fetches it exactly once) — nobody re-fetches the site.
+Every skill runs against **one shared crawl** of the page (`HttpFetcher` fetches it exactly once) — no skill re-fetches the target site.
 
-## Tech stack
+---
+
+## Audit Skills & Evaluation Criteria
+
+| Skill Module | Identifier | What It Audits |
+| :--- | :--- | :--- |
+| **`CrawlSkill`** | `crawl-render-audit` | HTTP status codes, robots meta directives, canonical tags, raw HTML word-count heuristics, and AI crawler accessibility. |
+| **`SchemaSkill`** | `schema-audit` | Presence and validity of `application/ld+json` structured data, OpenGraph tags, title length, and meta descriptions. |
+| **`FreshnessSkill`** | `freshness-audit` | Publication/modification timestamps, temporal metadata consistency, and outdated year/fact signals. |
+| **`EngagementSkill`** | `engagement-audit` | Heading hierarchy (`H1`–`H6`), semantic HTML structure, readability, call-to-action clarity, and link/image accessibility. |
+
+---
+
+## Tech Stack
 
 | Layer | Technology |
-| --- | --- |
-| Language | Java 21 |
-| Framework | Spring Boot 3 (Spring MVC, embedded Tomcat) |
-| Build | Maven |
-| Frontend | Plain HTML, CSS, vanilla JavaScript (no framework, no build step) |
-| HTML parsing | Jsoup |
-| JSON | Jackson (via Spring's built-in integration) |
-| Validation | Jakarta Bean Validation |
-| Monitoring | Spring Boot Actuator (`/actuator/health`) |
-| Testing | JUnit 5, Mockito, Spring MockMvc |
+| :--- | :--- |
+| **Language** | Java 21 |
+| **Framework** | Spring Boot 3 (Spring MVC, Embedded Tomcat) |
+| **Build Tool** | Apache Maven |
+| **Frontend** | Plain HTML5, CSS3, Vanilla JavaScript (zero framework, no build step) |
+| **HTML Parsing** | Jsoup |
+| **JSON Serialization** | Jackson (via Spring Boot starter web) |
+| **Validation** | Jakarta Bean Validation |
+| **Monitoring & Health** | Spring Boot Actuator (`/actuator/health`) |
+| **Testing** | JUnit 5, Mockito, Spring `MockMvc` |
+| **Containerization** | Docker & Docker Compose (Multi-stage build, non-root JRE runtime) |
 
-## Project structure
+---
 
-```
+## Project Structure
+
+```text
 ai-readiness-webapp/
 ├── pom.xml
 ├── Dockerfile
 ├── docker-compose.yml
 ├── README.md
 ├── src/main/java/com/readinessaudit/webapp/
-│   ├── AiReadinessWebApplication.java   Spring Boot entrypoint
+│   ├── AiReadinessWebApplication.java   # Spring Boot entrypoint
 │   ├── controller/
-│   │   └── AuditController.java         REST API: POST /api/audit
+│   │   └── AuditController.java         # REST API: POST /api/audit, GET /api/ping
 │   ├── service/
-│   │   └── AuditService.java            Timeout enforcement, exception translation
+│   │   └── AuditService.java            # Timeout enforcement & exception translation
 │   ├── config/
-│   │   ├── AsyncConfig.java             Bounded thread pool for audits
-│   │   └── RateLimitFilter.java         Per-IP rate limiting on /api/audit
+│   │   ├── AsyncConfig.java             # Bounded thread pool for audits
+│   │   └── RateLimitFilter.java         # Per-IP rate limiting on /api/audit
 │   ├── exception/
-│   │   ├── GlobalExceptionHandler.java  Consistent JSON error responses
+│   │   ├── GlobalExceptionHandler.java  # Consistent JSON error responses
 │   │   ├── InvalidUrlException.java
 │   │   ├── AuditTimeoutException.java
 │   │   └── AuditFailedException.java
 │   ├── dto/
-│   │   ├── AuditRequest.java            Validated request body
-│   │   └── ErrorResponse.java           Consistent error JSON shape
+│   │   ├── AuditRequest.java            # Validated request body
+│   │   └── ErrorResponse.java           # Standardized error JSON shape
 │   ├── crawler/
-│   │   ├── HttpFetcher.java             Fetches + parses a page (Jsoup)
-│   │   └── CrawlResult.java             Shared crawl data model
+│   │   ├── HttpFetcher.java             # Fetches + parses a page (Jsoup)
+│   │   └── CrawlResult.java             # Shared crawl data model
 │   ├── skills/
-│   │   ├── Skill.java                   Common interface
-│   │   ├── CrawlSkill.java              Crawlability & rendering
-│   │   ├── SchemaSkill.java             JSON-LD & metadata
-│   │   ├── FreshnessSkill.java          Stale/consistent facts
-│   │   └── EngagementSkill.java         UX & content clarity
+│   │   ├── Skill.java                   # Common audit skill interface
+│   │   ├── CrawlSkill.java              # Crawlability & rendering checks
+│   │   ├── SchemaSkill.java             # JSON-LD & metadata checks
+│   │   ├── FreshnessSkill.java          # Stale/consistent facts checks
+│   │   └── EngagementSkill.java         # UX & content clarity checks
 │   ├── orchestrator/
-│   │   └── AuditOrchestrator.java       Runs all skills against one crawl
+│   │   └── AuditOrchestrator.java       # Runs all skills against one shared crawl
 │   └── report/
-│       ├── Finding.java                 One evidence-backed issue
-│       ├── AuditReport.java             Final JSON shape
-│       └── ReportGenerator.java         Scoring + prioritization
+│       ├── Finding.java                 # Single evidence-backed issue
+│       ├── AuditReport.java             # Final JSON response model
+│       └── ReportGenerator.java         # Weighted scoring + severity prioritization
 ├── src/main/resources/
-│   ├── application.yml                  Externalized configuration
+│   ├── application.yml                  # Externalized configuration
 │   └── static/
-│       ├── index.html
+│       ├── index.html                   # Interactive audit dashboard UI
 │       ├── css/style.css
 │       └── js/app.js
 └── src/test/java/com/readinessaudit/webapp/
-    ├── report/ReportGeneratorTest.java     Scoring logic (unit)
-    ├── service/AuditServiceTest.java       Timeout & error handling (Mockito)
-    └── controller/AuditControllerTest.java Validation & API contract (MockMvc)
+    ├── report/ReportGeneratorTest.java      # Scoring logic unit tests
+    ├── service/AuditServiceTest.java        # Timeout & error handling tests (Mockito)
+    └── controller/AuditControllerTest.java  # Validation & API contract tests (MockMvc)
 ```
 
-## Running it
+---
 
-Requires a JDK 21 and Maven with normal internet access (to pull
-Spring Boot, Jsoup, and their dependencies from Maven Central on first
-build).
+## Getting Started
 
-```bash
-mvn spring-boot:run
-```
+### Prerequisites
 
-Then open **http://localhost:8080** in a browser and enter a URL.
+- **JDK 21** or higher
+- **Maven 3.9+** with internet access (to pull Spring Boot, Jsoup, and test dependencies from Maven Central)
+- **Docker** (optional, for containerized execution)
 
-Or build and run the jar directly:
+### Run Locally with Maven
+
+1. Clone the repository:
+   ```bash
+   git clone [https://github.com/Utkarsh-1129/WebISight-Website-Readiness-AI-Discoverability.git](https://github.com/Utkarsh-1129/WebISight-Website-Readiness-AI-Discoverability.git)
+   cd WebISight-Website-Readiness-AI-Discoverability
+   ```
+
+2. Start the Spring Boot server:
+   ```bash
+   mvn spring-boot:run
+   ```
+
+3. Open **http://localhost:8080** in your browser and enter any website URL.
+
+Alternatively, build and execute the packaged JAR directly:
 
 ```bash
 mvn clean package
 java -jar target/ai-readiness-webapp.jar
 ```
 
-### Running with Docker
+### Run with Docker Compose
 
 ```bash
 docker compose up --build
 ```
 
-This builds the app in a Maven container, packages it into a slim JRE
-runtime image running as a non-root user, and exposes it on port 8080
-with a container healthcheck against `/actuator/health`.
+This compiles the application inside a Maven build stage, packages the artifact into a slim JRE runtime image running as an unprivileged non-root user, exposes port `8080`, and configures a container healthcheck against `/actuator/health`.
 
-## API
+---
 
-### `POST /api/audit`
+## Environment Configuration
 
-```json
-{ "url": "https://example.com" }
+All operational parameters in `src/main/resources/application.yml` are externalized and can be overridden via environment variables without rebuilding the image:
+
+| Environment Variable | Description | Default |
+| :--- | :--- | :--- |
+| `SERVER_PORT` | HTTP port exposed by the embedded Tomcat server | `8080` |
+| `AUDIT_TIMEOUT_SECONDS` | Hard timeout in seconds for a single website audit | `15` |
+| `AUDIT_EXECUTOR_POOL_SIZE` | Maximum worker threads in the bounded audit thread pool | `10` |
+| `AUDIT_RATE_LIMIT_PER_MINUTE` | Maximum `/api/audit` requests permitted per IP per minute | `20` |
+
+---
+
+## REST API Reference
+
+### 1. Execute Website Audit
+
+`POST /api/audit`
+
+**Request Headers:**
+```http
+Content-Type: application/json
 ```
 
-Returns an `AuditReport`:
-
+**Request Body:**
 ```json
 {
-  "url": "https://example.com",
+  "url": "[https://example.com](https://example.com)"
+}
+```
+
+**Example `curl` Command:**
+```bash
+curl -X POST http://localhost:8080/api/audit \
+  -H "Content-Type: application/json" \
+  -d '{"url": "[https://example.com](https://example.com)"}'
+```
+
+**Response (`200 OK`):**
+```json
+{
+  "url": "[https://example.com](https://example.com)",
   "generatedAt": "2026-09-26T12:00:00Z",
   "overallScore": 90,
   "skillScores": {
@@ -148,86 +243,144 @@ Returns an `AuditReport`:
     "freshness-audit": 90,
     "engagement-audit": 90
   },
-  "summary": { "totalChecks": 9, "passed": 6, "failed": 3, "critical": 0, "high": 1, "medium": 2, "low": 0 },
-  "prioritizedActions": [ { "skill": "...", "severity": "HIGH", "issue": "...", "evidence": "...", "recommendation": "..." } ],
-  "findingsBySkill": { "...": "every finding, grouped by skill" }
+  "summary": {
+    "totalChecks": 9,
+    "passed": 6,
+    "failed": 3,
+    "critical": 0,
+    "high": 1,
+    "medium": 2,
+    "low": 0
+  },
+  "prioritizedActions": [
+    {
+      "skill": "schema-audit",
+      "severity": "HIGH",
+      "issue": "Missing JSON-LD structured data",
+      "evidence": "No <script type=\"application/ld+json\"> found on page",
+      "recommendation": "Embed valid Schema.org JSON-LD markup to improve entity extraction by AI crawlers."
+    }
+  ],
+  "findingsBySkill": {
+    "crawl-render-audit": [],
+    "schema-audit": [],
+    "freshness-audit": [],
+    "engagement-audit": []
+  }
 }
 ```
 
-`prioritizedActions` is sorted worst-severity-first.
+> `prioritizedActions` is automatically ordered worst-severity-first (`CRITICAL` → `HIGH` → `MEDIUM` → `LOW`).
 
-**Error responses** (400, 429, 502, 504, 500) all share one shape:
+**Error Responses (`400`, `429`, `502`, `504`, `500`):**
+
+All error paths return a consistent JSON schema via `GlobalExceptionHandler`:
 
 ```json
-{ "timestamp": "...", "status": 400, "error": "Bad Request", "message": "url must start with http:// or https://" }
+{
+  "timestamp": "2026-09-26T12:00:05Z",
+  "status": 400,
+  "error": "Bad Request",
+  "message": "url must start with http:// or https://"
+}
 ```
 
-### `GET /api/ping`
+| Status Code | Exception / Trigger | Reason |
+| :--- | :--- | :--- |
+| `400 Bad Request` | `InvalidUrlException` / Bean Validation | Blank URL or missing `http://` / `https://` scheme |
+| `429 Too Many Requests` | `RateLimitFilter` | Client IP exceeded `AUDIT_RATE_LIMIT_PER_MINUTE` |
+| `502 Bad Gateway` | `AuditFailedException` | Target site unreachable, DNS failure, or invalid HTTP response |
+| `504 Gateway Timeout` | `AuditTimeoutException` | Target audit exceeded `AUDIT_TIMEOUT_SECONDS` |
+| `500 Internal Server Error` | Unhandled Exception | Unexpected internal processing error |
 
-Simple liveness check for the API layer itself.
+---
 
-### `GET /actuator/health`
+### 2. API Liveness Check
 
-Spring Boot Actuator health endpoint, used by the Docker healthcheck and
-suitable for a load balancer or orchestrator's readiness probe.
+`GET /api/ping`
 
-## Production considerations already built in
+Lightweight liveness probe verifying that the Spring MVC controller layer is responsive.
 
-- **Bounded thread pool + hard timeout** (`AsyncConfig`, `AuditService`) — a
-  slow or hanging target site can never tie up a request indefinitely or
-  starve the web server's own request-handling threads. Configurable via
-  `AUDIT_TIMEOUT_SECONDS` and `AUDIT_EXECUTOR_POOL_SIZE`.
-- **Per-IP rate limiting** (`RateLimitFilter`) on `/api/audit` specifically,
-  since each request triggers a real outbound network call and is more
-  expensive than a typical API call. Configurable via
-  `AUDIT_RATE_LIMIT_PER_MINUTE`. Single-instance only — a multi-instance
-  deployment behind a load balancer would need a shared store (e.g. Redis)
-  instead.
-- **Centralized, consistent error handling** (`GlobalExceptionHandler`) — no
-  raw stack traces ever reach the client; every failure path returns the
-  same JSON error shape with an appropriate HTTP status.
-- **Input validation** (`AuditRequest`) — rejects blank or non-http(s) URLs
-  before any network call is attempted.
-- **Externalized configuration** (`application.yml`) — every tunable
-  (timeout, pool size, rate limit, port) is overridable via environment
-  variable without a rebuild, for different deployment environments.
-- **Structured logging** — every audit logs its start, duration, and
-  outcome; failures are logged with context before being translated into
-  a client-safe error message.
-- **Health endpoint** for container/load-balancer readiness and liveness
-  probes.
-- **Non-root container user** in the Docker image.
+---
+
+### 3. Container & Orchestrator Readiness Probe
+
+`GET /actuator/health`
+
+Spring Boot Actuator health endpoint used by Docker Compose healthchecks and cloud load balancers (Railway, Kubernetes, AWS ECS).
+
+---
+
+## Production Engineering Highlights
+
+- **Bounded Thread Pool + Hard Timeout (`AsyncConfig`, `AuditService`):** Slow or hanging target websites can never tie up a request indefinitely or starve Tomcat's request-handling threads.
+- **Per-IP Rate Limiting (`RateLimitFilter`):** Applied specifically to `/api/audit` since each invocation performs outbound network I/O. Designed as an in-memory filter for single-instance deployments; multi-instance horizontal deployments behind a load balancer can back this with Redis.
+- **Centralized Exception Translation (`GlobalExceptionHandler`):** Raw stack traces never reach the client; every failure mode maps cleanly to a structured `ErrorResponse`.
+- **Upfront Input Validation (`AuditRequest`):** Rejects malformed or non-HTTP(S) URLs before opening any network connection.
+- **Structured Logging:** Logs audit start, duration in milliseconds, and final score or failure context.
+- **Non-Root Container Hardening:** The production Docker image runs the JVM under an unprivileged system user.
+
+---
 
 ## Testing
+
+Execute the automated test suite with Maven:
 
 ```bash
 mvn test
 ```
 
-- `ReportGeneratorTest` — verifies scoring math and prioritization
-  ordering against synthetic findings, no network required.
-- `AuditServiceTest` — verifies the timeout and exception-translation
-  behavior using Mockito, including a real timeout firing under a tight
-  time budget.
-- `AuditControllerTest` — verifies request validation and the API
-  contract using Spring's `MockMvc`, with the service layer mocked out.
+- **`ReportGeneratorTest`:** Verifies weighted scoring math and severity prioritization ordering against synthetic findings without network dependencies.
+- **`AuditServiceTest`:** Verifies timeout enforcement and exception translation using Mockito, including real timeout triggers under a tight time budget.
+- **`AuditControllerTest`:** Verifies request payload validation, HTTP status codes, and JSON API contracts using Spring `MockMvc`.
 
-## Extending with a new skill
+---
 
-1. Implement `com.readinessaudit.webapp.skills.Skill` in a new class
-   annotated `@Component`.
-2. That's it — Spring auto-discovers every `Skill` bean and injects the
-   full list into `AuditOrchestrator`. No other code changes needed.
+## Extending with a New Audit Skill
 
-## What's deliberately out of scope for this version
+The auditing engine uses Spring's dependency injection for zero-config extensibility:
 
-- **Real JavaScript rendering.** `CrawlSkill` uses a raw-HTML word-count
-  heuristic instead of executing JS (e.g. via a headless browser), which
-  would add a heavyweight runtime dependency. Most AI crawlers don't
-  execute JavaScript either, so this is a reasonably faithful simulation.
-- **Multi-page/whole-site crawling.** The API audits one URL per request
-  by design; a sitemap-wide crawler is a materially different tool with
-  different failure modes (infinite loops, politeness delays).
-- **Persistent storage / audit history.** Every request is stateless;
-  nothing is written to a database. Add one if you need to track scores
-  over time.
+1. Create a new class implementing `com.readinessaudit.webapp.skills.Skill` and annotate it with `@Component`:
+
+   ```java
+   package com.readinessaudit.webapp.skills;
+
+   import com.readinessaudit.webapp.crawler.CrawlResult;
+   import com.readinessaudit.webapp.report.Finding;
+   import org.springframework.stereotype.Component;
+   import java.util.List;
+
+   @Component
+   public class SecurityHeadersSkill implements Skill {
+
+       @Override
+       public String getName() {
+           return "security-headers-audit";
+       }
+
+       @Override
+       public List<Finding> evaluate(CrawlResult crawl) {
+           // Inspect crawl data and return a list of Finding objects
+           return List.of();
+       }
+   }
+   ```
+
+2. **That's it.** Spring automatically discovers the new `Skill` bean and injects it into `AuditOrchestrator`. No modifications to `AuditOrchestrator`, `AuditService`, or `AuditController` are required.
+
+---
+
+## Scope & Design Trade-offs
+
+- **Static HTML Inspection vs. Headless Browser JS Rendering:** `CrawlSkill` inspects raw HTML and word-count heuristics rather than running a headless browser (such as Playwright or Puppeteer). Because most AI crawlers and LLM retrieval agents do not execute client-side JavaScript either, static HTML evaluation accurately reflects real-world AI discoverability while keeping container memory usage minimal.
+- **Single-URL Auditing:** The API audits one URL per request by design. Whole-site sitemap crawling requires asynchronous job queues, politeness delays, and loop detection, which are intentionally outside the scope of an interactive real-time analyzer.
+- **Stateless Execution:** Every request is stateless and self-contained without requiring an external database.
+
+---
+
+## Author
+
+**Utkarsh Trivedi**  
+- **GitHub:** [@Utkarsh-1129](https://github.com/Utkarsh-1129)
+- **LinkedIn:** [linkedin.com/in/utkarsh1129](https://www.linkedin.com/in/utkarsh1129)
+- **Email:** [utkarshtrivedi12d@gmail.com](mailto:utkarshtrivedi12d@gmail.com)
