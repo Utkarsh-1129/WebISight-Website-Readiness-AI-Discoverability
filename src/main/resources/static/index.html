@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AI Readiness Audit</title>
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <span class="brand-mark">◎</span>
+      <span class="brand-name">Kyvora.AI: AI Discoverability Intelligence</span>
+    </div>
+    <span class="tagline">Is your website discoverable by AI assistants?</span>
+  </div>
+</header>
+
+<main class="container">
+
+  <section class="hero">
+    <h1>Audit any website in seconds</h1>
+    <p class="hero-sub">
+      Checks crawlability, structured data, content freshness, and UX clarity:
+      the four things AI assistants judge before citing a page.
+    </p>
+
+    <form id="audit-form" class="audit-form" autocomplete="off">
+      <input
+        type="text"
+        id="url-input"
+        name="url"
+        placeholder="https://example.com"
+        required
+      />
+      <button type="submit" id="submit-btn">Run Audit</button>
+    </form>
+
+    <p id="form-error" class="form-error" hidden></p>
+  </section>
+
+  <section id="loading" class="loading-state" hidden>
+    <div class="spinner"></div>
+    <p>Fetching the page and running all four checks…</p>
+  </section>
+
+  <section id="results" class="results" hidden>
+
+    <div class="score-row">
+      <div class="score-card overall">
+        <div class="score-ring" id="overall-ring">
+          <span id="overall-score-value">0</span>
+        </div>
+        <div class="score-label">Overall score</div>
+        <div class="score-sub" id="audited-url"></div>
+      </div>
+
+      <div class="skill-scores" id="skill-scores"></div>
+    </div>
+
+    <div class="summary-bar" id="summary-bar"></div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <h2>Prioritized fixes</h2>
+        <button id="download-json" class="btn-secondary">Download JSON</button>
+      </div>
+      <div id="prioritized-list" class="finding-list"></div>
+      <p id="no-issues" class="no-issues" hidden>No issues found — every check passed.</p>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <h2>All findings by check</h2>
+      </div>
+      <div id="all-findings" class="skill-groups"></div>
+    </div>
+
+  </section>
+
+</main>
+
+<footer class="footer">
+  <p>Runs four independent checks against a single fetch of the page — no data is stored.</p>
+</footer>
+
+<script src="js/app.js"></script>
+</body>
+</html>

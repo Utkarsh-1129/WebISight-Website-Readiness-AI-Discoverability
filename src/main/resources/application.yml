@@ -1,0 +1,37 @@
+server:
+  port: ${PORT:8080}
+  # Fail fast on a hung upstream connection rather than tying up the servlet thread
+  tomcat:
+    connection-timeout: 20s
+
+spring:
+  application:
+    name: ai-readiness-webapp
+  jackson:
+    serialization:
+      indent-output: true
+
+# Application-specific settings, all overridable via environment variables
+# (e.g. AUDIT_TIMEOUT_SECONDS=45) for different deployment environments.
+audit:
+  timeout-seconds: ${AUDIT_TIMEOUT_SECONDS:30}
+  executor:
+    pool-size: ${AUDIT_EXECUTOR_POOL_SIZE:8}
+  rate-limit:
+    max-requests-per-minute: ${AUDIT_RATE_LIMIT_PER_MINUTE:20}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never
+
+logging:
+  level:
+    root: INFO
+    com.readinessaudit.webapp: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
